@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using Rnd = UnityEngine.Random;
 using KModkit;
+using System.Diagnostics;
 
 public class OddWallOutScript : MonoBehaviour
 {
@@ -24,6 +25,8 @@ public class OddWallOutScript : MonoBehaviour
     private bool _moduleSolved;
 
     private const int _size = 4;
+    private const int _sttpo = 2 * _size + 1;
+    private const int _numColors = 4;
     private MazeGenerator _mazeGenerator;
     private string _maze;
 
@@ -37,43 +40,140 @@ public class OddWallOutScript : MonoBehaviour
     private void Start()
     {
         _moduleId = _moduleIdCounter++;
-        _mazeGenerator = new MazeGenerator(_size, new MonoRandom(Rnd.Range(int.MinValue, int.MaxValue)));
 
         for (int i = 0; i < ButtonSels.Length; i++)
             ButtonSels[i].OnInteract += ButtonPress(i);
         for (int i = 0; i < WedgeObjs.Length; i++)
             WedgeObjs[i].GetComponent<MeshRenderer>().material = WedgeMats[4];
+    }
 
-        _displayOrder = Enumerable.Range(0, 16).ToArray().Shuffle();
+    private void Generate()
+    {
+        var rnd = new MonoRandom(Rnd.Range(int.MinValue, int.MaxValue));
+        var gen = new MazeGenerator(_size, rnd);
+        var maze = gen.GenerateMaze();
+        var walls = Enumerable.Range(0, _sttpo * _sttpo / 2).Select(ix => 2 * ix + 1).Where(ix => ix % _sttpo != _sttpo - 1 && ix / _sttpo != _sttpo - 1 && maze[ix] == '█').ToArray().Shuffle();
+        var firstNonEdgeWall = walls.IndexOf(ix => ix % _sttpo != 0 && ix % _sttpo != _sttpo - 1 && ix / _sttpo != 0 && ix / _sttpo != _sttpo - 1);
+        if (firstNonEdgeWall != 0)
+        {
+            var temp = walls[0];
+            walls[0] = walls[firstNonEdgeWall];
+            walls[firstNonEdgeWall] = temp;
+        }
 
-        _maze = _mazeGenerator.GenerateMaze();
+        var wallColors = walls.Select(w => rnd.Next(0, _numColors)).ToArray();
+        var specialWallColors = Enumerable.Range(0, _numColors).ToArray().Shuffle().Take(2).ToArray();
+        var tiles = Enumerable.Range(0, _size * _size).Select(pos =>
+        {
+            var cell = transformPosition(pos);
+            return new Tile(
+                getColor(cell - _sttpo, false, walls, wallColors, specialWallColors),
+                getColor(cell + 1, false, walls, wallColors, specialWallColors),
+                getColor(cell + _sttpo, true, walls, wallColors, specialWallColors),
+                getColor(cell - 1, true, walls, wallColors, specialWallColors)
+            );
+        }).ToArray();
 
+        // log the tiles??
 
-        var ch = _maze.ToCharArray();
-        for (int i = 1; i < ch.Length; i += 2)
-            if (ch[i] == '█' && i % 2 == 1)
-                ch[i] = (char)(Rnd.Range(0, 4) + '0');
+    }
 
-        _innerWallIxs = Enumerable.Range(0, _maze.Length).Where(i =>
-            i % (_size * 2 + 1) != 0 &&
-            i % (_size * 2 + 1) != (_size * 2) &&
-            i / (_size * 2 + 1) != 0 &&
-            i / (_size * 2 + 1) != (_size * 2) &&
-            i % 2 == 1).ToArray();
+    IEnumerable<Maze> ConstructMaze(Tile[] sofar, Tile[] remaining, int[][] disconnectedPieces, int mismatchedWallAlready)
+    {
+        if (sofar.Length == _size * _size)
+        {
+            if (remaining.Length != 0)
+                Debugger.Break();
+            if (disconnectedPieces.Length == 1)
+                yield return VisualizeMaze(sofar);
+            yield break;
+        }
 
-        var nonWalls = _innerWallIxs.Where(i => ch[i] != ' ').ToArray();
+        var cell = sofar.Length;
+        for (var i = 0; i < remaining.Length; i++)
+        {
+            var newTile = remaining[i];
 
-        _submissionIx = nonWalls.PickRandom();
-        ch[_submissionIx] = '?';
-        _dummyColors = Enumerable.Range(0, 4).ToArray().Shuffle().Take(2).ToArray();
-        _maze = ch.Join("");
+            // Make sure there is a wall around the edge of the maze
+            if ((cell % _size == 0 && newTile.left == -1) ||
+                (cell % _size == _size - 1 && newTile.right == -1) ||
+                (cell / _size == 0 && newTile.top == -1) ||
+                (cell / _size == _size - 1 && newTile.bottom == -1))
+                continue;
 
-        Debug.Log(_maze.Join(""));
+            // Make sure that walls/non-walls join up with each other ABOVE and LEFT
+            if (cell / _size != 0 && (sofar[above(cell)].bottom != -1) != (newTile.top != -1) || cell % _size != 0 && (sofar[left(cell)].right != -1) != (newTile.left != -1))
+                continue;
+            // If toroidal, make sure they join up BELOW and RIGHT
+            if ((cell / _size == _size - 1 && (sofar[below(cell)].top != -1) != (newTile.bottom != -1) || cell % _size == _size - 1 && (sofar[right(cell)].left != -1) != (newTile.right != -1)))
+                continue;
 
-        Debug.LogFormat("[Odd Wall Out #{0}] Maze:", _moduleId);
-        for (int i = 0; i < 9; i++)
-            Debug.LogFormat("[Odd Wall Out #{0}] {1}", _moduleId, _maze.Substring(i * 9, 9));
-        Debug.LogFormat("[Odd Wall Out #{0}] The correct button to submit is button #{1}.", _moduleId, Array.IndexOf(_innerWallIxs, _submissionIx) + 1);
+            var conflictsWithAbove = cell / _size != 0 && sofar[above(cell)].bottom != newTile.top;
+            var conflictsWithLeft = cell % _size != 0 && sofar[left(cell)].right != newTile.left;
+            var conflictsWithBelow = cell / _size == _size - 1 && sofar[below(cell)].top != newTile.bottom;
+            var conflictsWithRight = cell % _size == _size - 1 && sofar[right(cell)].left != newTile.right;
+
+            var newMismatches = mismatchedWallAlready + (conflictsWithAbove ? 1 : 0) + (conflictsWithLeft ? 1 : 0) + (conflictsWithBelow ? 1 : 0) + (conflictsWithRight ? 1 : 0);
+            if (newMismatches > 1)
+                continue;
+
+            var pieceAbove = newTile.top != -1 ? -1 : disconnectedPieces.IndexOf(dp => dp.Contains(above(cell)));
+            var pieceLeft = newTile.left != -1 ? -1 : disconnectedPieces.IndexOf(dp => dp.Contains(left(cell)));
+            var newDisconnectedPieces =
+                (pieceAbove != -1 && pieceLeft == pieceAbove) ? disconnectedPieces.Replace(pieceAbove, disconnectedPieces[pieceAbove].Append(cell)) :
+                (pieceAbove != -1 && pieceLeft != -1) ? disconnectedPieces.Remove(Math.Max(pieceLeft, pieceAbove), 1).Remove(Math.Min(pieceLeft, pieceAbove), 1)
+                    .Append(disconnectedPieces[pieceAbove].Concat(disconnectedPieces[pieceLeft]).Append(cell)) :
+                (pieceAbove != -1) ? disconnectedPieces.Replace(pieceAbove, disconnectedPieces[pieceAbove].Append(cell)) :
+                (pieceLeft != -1) ? disconnectedPieces.Replace(pieceLeft, disconnectedPieces[pieceLeft].Append(cell)) :
+                disconnectedPieces.Append([cell]);
+
+            foreach (var solution in constructMaze(sofar.Append(newTile), remaining.Remove(i, 1), newDisconnectedPieces, newMismatches))
+                yield return solution;
+        }
+    }
+
+    private static int right(int cell)
+    {
+        return (cell % _size + 1) % _size + _size * (cell / _size);
+    }
+
+    private static int below(int cell)
+    {
+        return (cell + _size) % (_size * _size);
+    }
+
+    private static int left(int cell)
+    {
+        return (cell % _size + _size - 1) % _size + _size * (cell / _size);
+    }
+
+    private static int above(int cell)
+    {
+        return (cell - _size + _size * _size) % (_size * _size);
+    }
+
+    private int getColor(int cl, bool sec, int[] walls, int[] wallColors, int[] specialWallColors)
+    {
+        if (cl == walls[0])
+        {
+            return specialWallColors[sec ? 1 : 0];
+        }
+        else
+        {
+            var p = Array.IndexOf(walls, cl);
+            var p2 = Array.IndexOf(walls, toroidalled(cl));
+            return p != -1 ? wallColors[p] : p2 != -1 ? wallColors[p2] : -1;
+        }
+    }
+
+    private int transformPosition(int pos)
+    {
+        return (pos / _size * (_size * 2 + 1) * 2) + (pos % _size * 2) + _size * 2 + 2;
+    }
+
+    private int toroidalled(int cl)
+    {
+        return (cl % _sttpo) % (_sttpo - 1) + _sttpo * ((cl / _sttpo) % (_sttpo - 1));
     }
 
     private KMSelectable.OnInteractHandler ButtonPress(int btn)
@@ -85,60 +185,113 @@ public class OddWallOutScript : MonoBehaviour
 
             if (_moduleSolved)
                 return false;
-            if (btn == _previouslyPressedButton)
-            {
-                if (_innerWallIxs[btn] == _submissionIx)
-                {
-                    Debug.LogFormat("[Odd Wall Out #{0}] Correctly submitted inner wall #{1}. Module solved.", _moduleId, btn + 1);
-                    _moduleSolved = true;
-                    Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.CorrectChime, transform);
-                    for (int i = 0; i < 4; i++)
-                        WedgeObjs[i].GetComponent<MeshRenderer>().material = WedgeMats[5];
-                    Module.HandlePass();
-                }
-                else
-                {
-                    Debug.LogFormat("[Odd Wall Out #{0}] Incorrectly submitted inner wall #{1}. Strike.", _moduleId, btn + 1);
-                    Module.HandleStrike();
-                }
-            }
-            else
-            {
-                _previouslyPressedButton = btn;
-                for (int i = 0; i < ButtonObjs.Length; i++)
-                {
-                    if (_previouslyPressedButton == i)
-                        ButtonObjs[i].GetComponent<MeshRenderer>().material = ButtonMats[1];
-                    else
-                        ButtonObjs[i].GetComponent<MeshRenderer>().material = ButtonMats[0];
-                }
 
-                DisplayWalls(_displayOrder[_cycleIx]);
-                _cycleIx = (_cycleIx + 1) % 16;
-            }
             return false;
         };
     }
+}
 
-    private void DisplayWalls(int pos)
+internal struct Tile
+{
+    public int top;
+    public int right;
+    public int bottom;
+    public int left;
+
+    public Tile(int top, int right, int bottom, int left)
     {
-        var p = GetTransformedPosition(pos);
-        var arr = new int[] { p - (_size * 2 + 1), p + 1, p + (_size * 2 + 1), p - 1 };
-        for (int i = 0; i < arr.Length; i++)
-        {
-            if (_maze[arr[i]] == '?' && i <= 1)
-                WedgeObjs[i].GetComponent<MeshRenderer>().material = WedgeMats[_dummyColors[0]];
-            else if (_maze[arr[i]] == '?' && i >= 2)
-                WedgeObjs[i].GetComponent<MeshRenderer>().material = WedgeMats[_dummyColors[1]];
-            else if (_maze[arr[i]] >= '0' && _maze[arr[i]] <= '3')
-                WedgeObjs[i].GetComponent<MeshRenderer>().material = WedgeMats[_maze[arr[i]] - '0'];
-            else
-                WedgeObjs[i].GetComponent<MeshRenderer>().material = WedgeMats[4];
-        }
+        this.top = top;
+        this.right = right;
+        this.bottom = bottom;
+        this.left = left;
     }
 
-    private int GetTransformedPosition(int pos)
+    public override bool Equals(object obj)
     {
-        return (pos / _size * (_size * 2 + 1) * 2) + (pos % _size * 2) + _size * 2 + 2;
+        if (!(obj is Tile))
+        {
+            return false;
+        }
+
+        Tile other = (Tile)obj;
+        return top == other.top &&
+               right == other.right &&
+               bottom == other.bottom &&
+               left == other.left;
+    }
+
+    public override int GetHashCode()
+    {
+        int hashCode = -402104261;
+        hashCode = hashCode * -1521134295 + top.GetHashCode();
+        hashCode = hashCode * -1521134295 + right.GetHashCode();
+        hashCode = hashCode * -1521134295 + bottom.GetHashCode();
+        hashCode = hashCode * -1521134295 + left.GetHashCode();
+        return hashCode;
+    }
+
+    public void Deconstruct(out int top, out int right, out int bottom, out int left)
+    {
+        top = this.top;
+        right = this.right;
+        bottom = this.bottom;
+        left = this.left;
+    }
+
+    public static implicit operator (int top, int right, int bottom, int left)(Tile value)
+    {
+        return (value.top, value.right, value.bottom, value.left);
+    }
+
+    public static implicit operator Tile((int top, int right, int bottom, int left) value)
+    {
+        return new NewStruct(value.top, value.right, value.bottom, value.left);
+    }
+}
+internal struct Maze
+{
+    public string str;
+    public int[] colors;
+
+    public Maze(string str, int[] colors)
+    {
+        this.str = str;
+        this.colors = colors;
+    }
+
+    public override bool Equals(object obj)
+    {
+        if (!(obj is Maze))
+        {
+            return false;
+        }
+
+        Maze other = (Maze)obj;
+        return str == other.str &&
+               EqualityComparer<int[]>.Default.Equals(colors, other.colors);
+    }
+
+    public override int GetHashCode()
+    {
+        int hashCode = -1468143167;
+        hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(str);
+        hashCode = hashCode * -1521134295 + EqualityComparer<int[]>.Default.GetHashCode(colors);
+        return hashCode;
+    }
+
+    public void Deconstruct(out string str, out int[] colors)
+    {
+        str = this.str;
+        colors = this.colors;
+    }
+
+    public static implicit operator (string str, int[] colors)(Maze value)
+    {
+        return (value.str, value.colors);
+    }
+
+    public static implicit operator Maze((string str, int[] colors) value)
+    {
+        return new NewStruct(value.str, value.colors);
     }
 }
