@@ -1,39 +1,27 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Linq;
 
-internal struct Maze
+internal struct Maze : IEquatable<Maze>
 {
-    public string str;
-    public int[] colors;
+    public string String;
+    public int[] Colors;
 
     public Maze(string str, int[] colors)
     {
-        this.str = str;
-        this.colors = colors;
-    }
-
-    public override bool Equals(object obj)
-    {
-        if (!(obj is Maze))
-        {
-            return false;
-        }
-
-        Maze other = (Maze)obj;
-        return str == other.str &&
-               EqualityComparer<int[]>.Default.Equals(colors, other.colors);
+        String = str;
+        Colors = colors;
     }
 
     public override int GetHashCode()
     {
         int hashCode = -1468143167;
-        hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(str);
-        hashCode = hashCode * -1521134295 + EqualityComparer<int[]>.Default.GetHashCode(colors);
+        hashCode = hashCode * -1521134295 + String.GetHashCode();
+        hashCode = hashCode * -1521134295 + Colors.Length;
+        for (var i = 0; i < Colors.Length; i++)
+            hashCode = hashCode * -1521134295 + Colors[i];
         return hashCode;
     }
 
-    public void Deconstruct(out string str, out int[] colors)
-    {
-        str = this.str;
-        colors = this.colors;
-    }
+    public bool Equals(Maze other) => other.String == String && other.Colors.SequenceEqual(Colors);
+    public override bool Equals(object obj) => obj is Maze && Equals((Maze) obj);
 }
