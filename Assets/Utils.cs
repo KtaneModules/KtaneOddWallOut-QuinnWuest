@@ -67,4 +67,24 @@ static class Utils
         Array.Copy(array, startIndex, result, startIndex + values.Length, array.Length - startIndex);
         return result;
     }
+
+    /// <summary>
+    ///     Concatenates two arrays.</summary>
+    /// <remarks>
+    ///     Returns a new copy of the array even if one of the input arrays is empty.</remarks>
+    public static T[] Concat<T>(this T[] array, T[] otherArray)
+    {
+        if (array == null)
+            throw new ArgumentNullException(nameof(array));
+        if (otherArray == null)
+            throw new ArgumentNullException(nameof(otherArray));
+        if (otherArray.Length == 0)
+            return (T[])array.Clone();
+        if (array.Length == 0)
+            return (T[])otherArray.Clone();
+        T[] result = new T[array.Length + otherArray.Length];
+        Array.Copy(array, 0, result, 0, array.Length);
+        Array.Copy(otherArray, 0, result, array.Length, otherArray.Length);
+        return result;
+    }
 }
