@@ -125,7 +125,7 @@ public class OddWallOutScript : MonoBehaviour
                     .Append(disconnectedPieces[pieceAbove].Concat(disconnectedPieces[pieceLeft]).Append(cell)) :
                 (pieceAbove != -1) ? disconnectedPieces.Replace(pieceAbove, disconnectedPieces[pieceAbove].Append(cell)) :
                 (pieceLeft != -1) ? disconnectedPieces.Replace(pieceLeft, disconnectedPieces[pieceLeft].Append(cell)) :
-                disconnectedPieces.Append([cell]);
+                disconnectedPieces.Append(new[] { cell });
 
             foreach (var solution in constructMaze(sofar.Append(newTile), remaining.Remove(i, 1), newDisconnectedPieces, newMismatches))
                 yield return solution;
@@ -188,110 +188,5 @@ public class OddWallOutScript : MonoBehaviour
 
             return false;
         };
-    }
-}
-
-internal struct Tile
-{
-    public int top;
-    public int right;
-    public int bottom;
-    public int left;
-
-    public Tile(int top, int right, int bottom, int left)
-    {
-        this.top = top;
-        this.right = right;
-        this.bottom = bottom;
-        this.left = left;
-    }
-
-    public override bool Equals(object obj)
-    {
-        if (!(obj is Tile))
-        {
-            return false;
-        }
-
-        Tile other = (Tile)obj;
-        return top == other.top &&
-               right == other.right &&
-               bottom == other.bottom &&
-               left == other.left;
-    }
-
-    public override int GetHashCode()
-    {
-        int hashCode = -402104261;
-        hashCode = hashCode * -1521134295 + top.GetHashCode();
-        hashCode = hashCode * -1521134295 + right.GetHashCode();
-        hashCode = hashCode * -1521134295 + bottom.GetHashCode();
-        hashCode = hashCode * -1521134295 + left.GetHashCode();
-        return hashCode;
-    }
-
-    public void Deconstruct(out int top, out int right, out int bottom, out int left)
-    {
-        top = this.top;
-        right = this.right;
-        bottom = this.bottom;
-        left = this.left;
-    }
-
-    public static implicit operator (int top, int right, int bottom, int left)(Tile value)
-    {
-        return (value.top, value.right, value.bottom, value.left);
-    }
-
-    public static implicit operator Tile((int top, int right, int bottom, int left) value)
-    {
-        return new NewStruct(value.top, value.right, value.bottom, value.left);
-    }
-}
-internal struct Maze
-{
-    public string str;
-    public int[] colors;
-
-    public Maze(string str, int[] colors)
-    {
-        this.str = str;
-        this.colors = colors;
-    }
-
-    public override bool Equals(object obj)
-    {
-        if (!(obj is Maze))
-        {
-            return false;
-        }
-
-        Maze other = (Maze)obj;
-        return str == other.str &&
-               EqualityComparer<int[]>.Default.Equals(colors, other.colors);
-    }
-
-    public override int GetHashCode()
-    {
-        int hashCode = -1468143167;
-        hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(str);
-        hashCode = hashCode * -1521134295 + EqualityComparer<int[]>.Default.GetHashCode(colors);
-        return hashCode;
-    }
-
-    public void Deconstruct(out string str, out int[] colors)
-    {
-        str = this.str;
-        colors = this.colors;
-    }
-
-    public static implicit operator (string str, int[] colors)(Maze value)
-    {
-        return (value.str, value.colors);
-    }
-
-    public static implicit operator Maze((string str, int[] colors) value)
-    {
-        return new NewStruct(value.str, value.colors);
     }
 }
