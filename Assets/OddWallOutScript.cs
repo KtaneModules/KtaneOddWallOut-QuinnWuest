@@ -27,15 +27,11 @@ public class OddWallOutScript : MonoBehaviour
     private const int _size = 4;
     private const int _sttpo = 2 * _size + 1;
     private const int _numColors = 4;
-    private MazeGenerator _mazeGenerator;
-    private string _maze;
 
     private int? _previouslyPressedButton = null;
-    private int[] _displayOrder;
+    private Tile[] _tiles;
     private int _submissionIx;
-    private int[] _dummyColors;
     private int _cycleIx;
-    private int[] _innerWallIxs;
 
     private void Start()
     {
@@ -43,8 +39,6 @@ public class OddWallOutScript : MonoBehaviour
 
         for (int i = 0; i < ButtonSels.Length; i++)
             ButtonSels[i].OnInteract += ButtonPress(i);
-        for (int i = 0; i < WedgeObjs.Length; i++)
-            WedgeObjs[i].GetComponent<MeshRenderer>().material = WedgeMats[4];
 
         var seed = Rnd.Range(int.MinValue, int.MaxValue);
         Debug.Log($"[Odd Wall Out #{_moduleId}] Random seed: {seed}");
@@ -64,7 +58,7 @@ public class OddWallOutScript : MonoBehaviour
 
         var wallColors = walls.Select(w => rnd.Next(0, _numColors)).ToArray();
         var specialWallColors = Enumerable.Range(0, _numColors).ToArray().Shuffle().Take(2).ToArray();
-        var tiles = Enumerable.Range(0, _size * _size).Select(TransformPosition).Select(cell => new Tile(
+        _tiles = Enumerable.Range(0, _size * _size).Select(TransformPosition).Select(cell => new Tile(
                 GetColor(cell - _sttpo, false, walls, wallColors, specialWallColors),
                 GetColor(cell + 1, false, walls, wallColors, specialWallColors),
                 GetColor(cell + _sttpo, true, walls, wallColors, specialWallColors),
@@ -72,14 +66,18 @@ public class OddWallOutScript : MonoBehaviour
             )).ToArray();
 
         // Make sure the maze is unique
-        if (ConstructMaze(new Tile[0], tiles, new int[0][], 0).Take(2).Count() > 1)
+        if (ConstructMaze(new Tile[0], _tiles, new int[0][], 0).Take(2).Count() > 1)
             goto tryAgain;
 
         // Log the intended maze
-        Debug.Log($"[Odd Wall Out #{_moduleId}]=svg[Solution maze:]{GenerateSvg(tiles)}");
+        Debug.Log($"[Odd Wall Out #{_moduleId}]=svg[Solution maze:]{GenerateSvg(_tiles)}");
 
         // Now randomize the order of the tiles
-        tiles.Shuffle();
+        _tiles.Shuffle();
+
+        DisplayTile(_tiles[0]);
+        _submissionIx = (walls[0] % 9 - 1 + 7 * (walls[0] / 9 - 1)) / 2;
+        Debug.Log($"[Odd Wall Out #{_moduleId}] The button to submit is button {_submissionIx + 1}.");
     }
 
     private string GenerateSvg(Tile[] tiles)
@@ -177,51 +175,14 @@ public class OddWallOutScript : MonoBehaviour
     private int GetColor(int cl, bool sec, int[] walls, int[] wallColors, int[] specialWallColors)
     {
         if (cl == walls[0])
-        {
             return specialWallColors[sec ? 1 : 0];
-        }
-        else
-        {
-            var p = Array.IndexOf(walls, cl);
-            var p2 = Array.IndexOf(walls, Toroidalled(cl));
-            return p != -1 ? wallColors[p] : p2 != -1 ? wallColors[p2] : -1;
-        }
+        var p = Array.IndexOf(walls, cl);
+        var p2 = Array.IndexOf(walls, Toroidalled(cl));
+        return p != -1 ? wallColors[p] : p2 != -1 ? wallColors[p2] : -1;
     }
 
     private static int TransformPosition(int pos) => (pos / _size * (_size * 2 + 1) * 2) + (pos % _size * 2) + _size * 2 + 2;
     private static int Toroidalled(int cl) => (cl % _sttpo) % (_sttpo - 1) + _sttpo * ((cl / _sttpo) % (_sttpo - 1));
-
-    private static Tile GetTile(Tile[] tiles, int ix) => ix < 0 || ix >= tiles.Length ? new Tile(-1, -1, -1, -1) : tiles[ix];
-
-    //private static Maze VisualizeMaze(Tile[] tiles) =>
-    //        Enumerable.Range(0, (_size * 2 + 1) * (_size * 2 + 1)).Select(ix => new { x = ix % (_size * 2 + 1), y = ix / (_size * 2 + 1) })
-    //            .Select(c =>
-    //            {
-    //                if (c.x % 2 == 0 && c.y % 2 == 0)
-    //                    return new { String = "██", Colors = new[] { -1, -1 } };
-    //                if (c.x % 2 == 1 && c.y % 2 == 1)
-    //                    return new { String = "  ", Colors = new[] { -1, -1 } };
-    //                if (c.x % 2 == 0)
-    //                {
-    //                    var rightColor = c.x >= 2 * _size ? -1 : GetTile(tiles, c.x / 2 + _size * (c.y / 2)).left;
-    //                    var leftColor = c.x == 0 ? -1 : GetTile(tiles, c.x / 2 - 1 + _size * (c.y / 2)).right;
-    //                    if (leftColor == -1 && rightColor == -1)
-    //                        return "  ";
-    //                    if (leftColor == -1 || rightColor == -1)
-    //                        return new { String = "██", Color = new[] { leftColor == -1 ? rightColor : leftColor, leftColor == -1 ? rightColor : leftColor } };
-    //                    return new { String = "██", Color = new[] { leftColor, rightColor } };
-    //                }
-    //                var bottomColor = c.y >= 2 * _size ? -1 : GetTile(tiles, c.x / 2 + _size * (c.y / 2)).top;
-    //                var topColor = c.y == 0 ? -1 : GetTile(tiles, c.x / 2 + _size * (c.y / 2 - 1)).bottom;
-    //                if (topColor == -1 && bottomColor == -1)
-    //                    return "  ";
-    //                if (topColor == -1 || bottomColor == -1)
-    //                    return new { String = "██", Color = new[] { topColor == -1 ? bottomColor : topColor, topColor == -1 ? bottomColor : topColor } };
-    //                return "▀▀".Color(topColor, bottomColor);
-    //            })
-    //                .Split(2 * _size + 1)
-    //                .Select(chunk => chunk.JoinColoredString())
-    //                .JoinColoredString("\n");
 
     private KMSelectable.OnInteractHandler ButtonPress(int btn)
     {
@@ -233,7 +194,43 @@ public class OddWallOutScript : MonoBehaviour
             if (_moduleSolved)
                 return false;
 
+            if (btn == _previouslyPressedButton)
+            {
+                if (btn == _submissionIx)
+                {
+                    Debug.Log($"[Odd Wall Out #{_moduleId}] Correctly submitted button {btn + 1}. Module solved.");
+                    for (int i = 0; i < ButtonObjs.Length; i++)
+                        ButtonObjs[i].GetComponent<MeshRenderer>().sharedMaterial = ButtonMats[1];
+                    for (int i = 0; i < WedgeObjs.Length; i++)
+                        WedgeObjs[i].GetComponent<MeshRenderer>().sharedMaterial = WedgeMats[5];
+                    _moduleSolved = true;
+                    Module.HandlePass();
+                }
+                else
+                {
+                    Debug.Log($"[Odd Wall Out #{_moduleId}] Incorrectly submitted button {btn + 1}. Strike.");
+                    Module.HandleStrike();
+                }
+                return false;
+            }
+
+            _previouslyPressedButton = btn;
+
+            for (int i = 0; i < ButtonObjs.Length; i++)
+                ButtonObjs[i].GetComponent<MeshRenderer>().sharedMaterial = ButtonMats[i == btn ? 1 : 0];
+
+            _cycleIx = (_cycleIx + 1) % (_size * _size);
+            DisplayTile(_tiles[_cycleIx]);
+
             return false;
         };
+    }
+
+    private void DisplayTile(Tile tile)
+    {
+        WedgeObjs[0].GetComponent<MeshRenderer>().sharedMaterial = WedgeMats[tile.top + 1];
+        WedgeObjs[1].GetComponent<MeshRenderer>().sharedMaterial = WedgeMats[tile.right + 1];
+        WedgeObjs[2].GetComponent<MeshRenderer>().sharedMaterial = WedgeMats[tile.bottom + 1];
+        WedgeObjs[3].GetComponent<MeshRenderer>().sharedMaterial = WedgeMats[tile.left + 1];
     }
 }
