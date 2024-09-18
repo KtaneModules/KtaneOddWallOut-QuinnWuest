@@ -22,6 +22,8 @@ public class OddWallOutScript : MonoBehaviour
 
     private int _moduleId;
     private static int _moduleIdCounter = 1;
+    private int _oddWallOutId;
+    private static int _oddWallOutIdCounter = 1;
     private bool _moduleSolved;
 
     private const int _size = 4;
@@ -36,9 +38,16 @@ public class OddWallOutScript : MonoBehaviour
     private void Start()
     {
         _moduleId = _moduleIdCounter++;
+        _oddWallOutId = _oddWallOutIdCounter++;
 
         for (int i = 0; i < ButtonSels.Length; i++)
             ButtonSels[i].OnInteract += ButtonPress(i);
+
+        Module.OnActivate += delegate
+        {
+            if (_oddWallOutId == 1)
+                Audio.PlaySoundAtTransform("weow", transform);
+        };
 
         var seed = Rnd.Range(int.MinValue, int.MaxValue);
         Debug.Log($"[Odd Wall Out #{_moduleId}] Random seed: {seed}");
@@ -204,6 +213,7 @@ public class OddWallOutScript : MonoBehaviour
                     for (int i = 0; i < WedgeObjs.Length; i++)
                         WedgeObjs[i].GetComponent<MeshRenderer>().sharedMaterial = WedgeMats[5];
                     _moduleSolved = true;
+                    Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.CorrectChime, transform);
                     Module.HandlePass();
                 }
                 else
@@ -232,5 +242,38 @@ public class OddWallOutScript : MonoBehaviour
         WedgeObjs[1].GetComponent<MeshRenderer>().sharedMaterial = WedgeMats[tile.right + 1];
         WedgeObjs[2].GetComponent<MeshRenderer>().sharedMaterial = WedgeMats[tile.bottom + 1];
         WedgeObjs[3].GetComponent<MeshRenderer>().sharedMaterial = WedgeMats[tile.left + 1];
+    }
+
+#pragma warning disable 0414
+    private readonly string TwitchHelpMessage = "!{0} press 1 2 3 4 [Press buttons 1, 2, 3, 4.]";
+#pragma warning restore 0414
+
+    private IEnumerator ProcessTwitchCommand(string command)
+    {
+        command = command.ToLowerInvariant();
+        if (!command.StartsWith("press"))
+            yield break;
+        command = command.Substring(5).Trim();
+        var arr = command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        var btns = new List<KMSelectable>();
+        for (int i = 0; i < arr.Length; i++)
+        {
+            int val;
+            if (!int.TryParse(arr[i], out val) || val < 1 || val > 24)
+                yield break;
+            btns.Add(ButtonSels[val - 1]);
+        }
+        yield return null;
+        yield return btns;
+    }
+
+    private IEnumerator TwitchHandleForcedSolve()
+    {
+        ButtonSels[_submissionIx].OnInteract();
+        if (!_moduleSolved)
+        {
+            yield return new WaitForSeconds(0.1f);
+            ButtonSels[_submissionIx].OnInteract();
+        }
     }
 }

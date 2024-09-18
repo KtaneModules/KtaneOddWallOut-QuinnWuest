@@ -1,0 +1,10 @@
+{
+  "name": "OddWallOutModule-Editor",
+  "references": [
+    "OddWallOutModule"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": []
+}

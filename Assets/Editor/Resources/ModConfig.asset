@@ -14,7 +14,10 @@ MonoBehaviour:
   id: OddWallOutModule
   title: Odd Wall Out
   author: Quinn Wuest
-  description: Odd Wall Out
+  description: "Did you hear the one about the guitarist that couldn't take it anymore?
+    They were asked to play Wonderwall.\n\nManual by Blananas2\nDeveloped by Quinn
+    Wuest & Timwi\n\n[url=https://ktane.timwi.de/HTML/Odd Wall Out.html]Manual HTML[/url]\r\n[url=https://ktane.timwi.de/PDF/Odd
+    Wall Out.pdf]Manual PDF[/url]"
   version: 1.0
   outputFolder: build
-  previewImage: {fileID: 2800000, guid: bd5c1f4881f57d54481b44e4c8a7779a, type: 3}
+  previewImage: {fileID: 2800000, guid: d35bb7c51165ea04bb5209004a2b1cf7, type: 3}
